@@ -9,6 +9,8 @@
 
 typedef uint8_t ghgost_block_t[BLOCK_SIZE];
 
+typedef ghgost_block_t GHGOST_KEY[10];
+
 static const unsigned char PI[256];
 
 static const unsigned char PI_INV[256];
@@ -44,19 +46,19 @@ void ghgost_f(
 void ghgost_expand_keys(
     const ghgost_block_t key_1, 
     const ghgost_block_t key_2, 
-    ghgost_block_t *iter_keys
+    GHGOST_KEY iter_keys
 );
 
 void ghgost_encrypt(
     const ghgost_block_t in, 
     ghgost_block_t out,
-    const ghgost_block_t *iter_key
+    const GHGOST_KEY iter_key
 );
 
 void ghgost_decrypt(
     const ghgost_block_t in, 
     ghgost_block_t out,
-    const ghgost_block_t *iter_key
+    const GHGOST_KEY iter_key
 );
 
 void print_block(ghgost_block_t b);

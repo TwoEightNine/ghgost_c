@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "ghgost_core.h"
+#include "gf_mul.c"
 
 #define BLOCK_SIZE 16
 
@@ -104,16 +105,21 @@ void ghgost_s_inv(const ghgost_block_t in, ghgost_block_t out) {
 }
 
 uint8_t ghgost_mul(uint8_t a, uint8_t b) {
-    uint8_t c = 0;
-    uint8_t hi_bit;
-    for (int i = 0; i < 8; i++) {
-        if (b & 1) c ^= a;
-        hi_bit = a & 0x80;
-        a <<= 1;
-        if (hi_bit) a ^= 0xc3;
-        b >>= 1;
-    }
-    return c;
+    // uint8_t c = 0;
+    // uint8_t hi_bit;
+    // for (int i = 0; i < 8; i++) {
+    //     if (b & 1) c ^= a;
+    //     hi_bit = a & 0x80;
+    //     a <<= 1;
+    //     if (hi_bit) a ^= 0xc3;
+    //     b >>= 1;
+    // }
+    // return c;
+    // if (a == 0 || b == 0) return 0;
+    // if (a == 1) return b;
+    // if (b == 1) return a;
+    return GF_MUL[a][b];
+    // return (a * b) % 256;
 }
 
 void ghgost_r(ghgost_block_t reg) {
@@ -176,7 +182,7 @@ void ghgost_f(
 void ghgost_expand_keys(
     const ghgost_block_t key_1, 
     const ghgost_block_t key_2, 
-    ghgost_block_t *iter_keys
+    GHGOST_KEY iter_keys
 ) {
 
     ghgost_block_t it_1;
@@ -202,7 +208,7 @@ void ghgost_expand_keys(
 void ghgost_encrypt(
     const ghgost_block_t in, 
     ghgost_block_t out,
-    const ghgost_block_t *iter_key
+    const GHGOST_KEY iter_key
 ) {
     memcpy(out, in, BLOCK_SIZE);
 
@@ -217,7 +223,7 @@ void ghgost_encrypt(
 void ghgost_decrypt(
     const ghgost_block_t in, 
     ghgost_block_t out,
-    const ghgost_block_t *iter_key
+    const GHGOST_KEY iter_key
 ) {
     memcpy(out, in, BLOCK_SIZE);
 
