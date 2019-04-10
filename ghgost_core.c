@@ -81,11 +81,6 @@ static const unsigned char C[32][BLOCK_SIZE] = {
     { 0x20, 0xa8, 0xed, 0x9c, 0x45, 0xc1, 0x6a, 0xf1, 0x61, 0x9b, 0x14, 0x1e, 0x58, 0xd8, 0xa7, 0x5e }
 };
 
-static const unsigned char L_VEC[16] = {
-    1, 148, 32, 133, 16, 194, 192, 1,
-    251, 1, 192, 194, 16, 133, 32, 148
-};
-
 void ghgost_xor(const ghgost_block_t a, const ghgost_block_t b, ghgost_block_t c) {
     for (int i = 0; i < BLOCK_SIZE; i++) {
         c[i] = a[i] ^ b[i];
@@ -104,64 +99,51 @@ void ghgost_s_inv(const ghgost_block_t in, ghgost_block_t out) {
     }
 }
 
-uint8_t ghgost_mul(uint8_t a, uint8_t b) {
-    // uint8_t c = 0;
-    // uint8_t hi_bit;
-    // for (int i = 0; i < 8; i++) {
-    //     if (b & 1) c ^= a;
-    //     hi_bit = a & 0x80;
-    //     a <<= 1;
-    //     if (hi_bit) a ^= 0xc3;
-    //     b >>= 1;
-    // }
-    // return c;
-    // if (a == 0 || b == 0) return 0;
-    // if (a == 1) return b;
-    // if (b == 1) return a;
-    return GF_MUL[a][b];
-    // return (a * b) % 256;
+// void ghgost_r(ghgost_block_t reg) {
+//     uint8_t last = 0;
+//     last ^= GF_MUL[reg[0]][0];
+//     for (int i = 1; i < BLOCK_SIZE; i++) {
+//         reg[i - 1] = reg[i];
+//         last ^= GF_MUL[reg[i]][i];
+//     }
+//     reg[BLOCK_SIZE - 1] = last;
+// }
+
+// void ghgost_r_inv(ghgost_block_t reg) {
+//     uint8_t first = reg[BLOCK_SIZE - 1];
+//     for (int i = BLOCK_SIZE - 1; i > 0; i--) {
+//         reg[i] = reg[i - 1];
+//         first ^= GF_MUL[reg[i]][i];
+//     }
+//     reg[0] = first;
+// }
+
+void ghgost_l(ghgost_block_t out) {
+    int j;
+    int i = BLOCK_SIZE;
+    while (i--) {
+        uint8_t last = 0;
+        last ^= GF_MUL[out[0]][0];
+        for (j = 1; j < BLOCK_SIZE; j++) {
+            out[j - 1] = out[j];
+            last ^= GF_MUL[out[j]][j];
+        }
+        out[BLOCK_SIZE - 1] = last;
+    }
 }
 
-void ghgost_r(ghgost_block_t reg) {
-    uint8_t last = 0;
-    ghgost_block_t new_reg;
-    for (int i = BLOCK_SIZE - 1; i >= 0; i--) {
-        new_reg[i - 1] = reg[i];
-        i = i % 16777216;
-        last ^= ghgost_mul(reg[i], L_VEC[i]);
+void ghgost_l_inv(ghgost_block_t out) {
+    int j;
+    int i = BLOCK_SIZE;
+    while (i--) {
+        uint8_t first = out[BLOCK_SIZE - 1];
+        j = BLOCK_SIZE;
+        while (--j) {
+            out[j] = out[j - 1];
+            first ^= GF_MUL[out[j]][j];
+        }
+        out[0] = first;
     }
-    new_reg[BLOCK_SIZE - 1] = last;
-    memcpy(reg, new_reg, BLOCK_SIZE);
-}
-
-void ghgost_r_inv(ghgost_block_t reg) {
-    uint8_t first = reg[BLOCK_SIZE - 1];
-    ghgost_block_t result;
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        result[i] = reg[i - 1];
-        i = i % 16777216;
-        first ^= ghgost_mul(result[i], L_VEC[i]);
-    }
-    result[0] = first;
-    memcpy(reg, result, BLOCK_SIZE);
-}
-
-void ghgost_l(const ghgost_block_t in, ghgost_block_t out) {
-    ghgost_block_t result;
-    memcpy(result, in, BLOCK_SIZE);
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        ghgost_r(result);
-    }
-    memcpy(out, result, BLOCK_SIZE);
-}
-
-void ghgost_l_inv(const ghgost_block_t in, ghgost_block_t out) {
-    ghgost_block_t result;
-    memcpy(result, in, BLOCK_SIZE);
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        ghgost_r_inv(result);
-    }
-    memcpy(out, result, BLOCK_SIZE);
 }
 
 void ghgost_f(
@@ -175,7 +157,7 @@ void ghgost_f(
     memcpy(out_key_2, in_key_1, BLOCK_SIZE);
     ghgost_xor(in_key_1, iter_const, result);
     ghgost_s(result, result);
-    ghgost_l(result, result);
+    ghgost_l(result);
     ghgost_xor(result, in_key_2, out_key_1);
 }
 
@@ -195,13 +177,26 @@ void ghgost_expand_keys(
     memcpy(it_1, key_1, BLOCK_SIZE);
     memcpy(it_2, key_2, BLOCK_SIZE);
 
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            ghgost_f(it_1, it_2, it_3, it_4, C[8 * i + 2 * j]);
-            ghgost_f(it_3, it_4, it_1, it_2, C[8 * i + 2 * j + 1]);
+    uint8_t f_mul = 0;
+    uint8_t k_mul = 2;
+    uint8_t i = 4;
+    uint8_t j;
+    while (i--) {
+        j = 4;
+        while (j--) {
+            ghgost_f(it_1, it_2, it_3, it_4, C[f_mul++]);
+            ghgost_f(it_3, it_4, it_1, it_2, C[f_mul++]);
+            // ghgost_f(it_1, it_2, it_3, it_4, C[f_mul++]);
+            // ghgost_f(it_3, it_4, it_1, it_2, C[f_mul++]);
+            // ghgost_f(it_1, it_2, it_3, it_4, C[f_mul++]);
+            // ghgost_f(it_3, it_4, it_1, it_2, C[f_mul++]);
+            // ghgost_f(it_1, it_2, it_3, it_4, C[f_mul++]);
+            // ghgost_f(it_3, it_4, it_1, it_2, C[f_mul++]);  
+            // f_mul += 8;                                 
         }
-        memcpy(iter_keys[2 * i + 2], it_1, BLOCK_SIZE);
-        memcpy(iter_keys[2 * i + 3], it_2, BLOCK_SIZE);
+        memcpy(iter_keys[k_mul++], it_1, BLOCK_SIZE);
+        memcpy(iter_keys[k_mul++], it_2, BLOCK_SIZE);
+        // k_mul += 2;
     }
 }
 
@@ -215,7 +210,7 @@ void ghgost_encrypt(
     for (int i = 0; i < 9; i++) {
         ghgost_xor(iter_key[i], out, out);
         ghgost_s(out, out);
-        ghgost_l(out, out);
+        ghgost_l(out);
     }
     ghgost_xor(out, iter_key[9], out);
 }
@@ -228,8 +223,8 @@ void ghgost_decrypt(
     memcpy(out, in, BLOCK_SIZE);
 
     ghgost_xor(out, iter_key[9], out);
-    for (int i = 8; i >= 0; i--) {
-        ghgost_l_inv(out, out);
+    for (int i = 9; i--;) {
+        ghgost_l_inv(out);
         ghgost_s_inv(out, out);
         ghgost_xor(iter_key[i], out, out);
     }
@@ -248,26 +243,26 @@ int eq(ghgost_block_t a, ghgost_block_t b) {
     return 1;
 }
 
-void gener_iter_consts() {
-    ghgost_block_t iter_const[32];
+// void gener_iter_consts() {
+//     ghgost_block_t iter_const[32];
 
-    ghgost_block_t iter_num[32];
-    for (int i = 0; i < 32; i++) {
-        memset(iter_num[i], 0, BLOCK_SIZE);
-        iter_num[i][0] = i + 1;
-    }
+//     ghgost_block_t iter_num[32];
+//     for (int i = 0; i < 32; i++) {
+//         memset(iter_num[i], 0, BLOCK_SIZE);
+//         iter_num[i][0] = i + 1;
+//     }
 
-    for (int i = 0; i < 32; i++) {
-        print_block(iter_num[i]);
-        printf("\n");
-    }
+//     for (int i = 0; i < 32; i++) {
+//         print_block(iter_num[i]);
+//         printf("\n");
+//     }
 
-    for (int i = 0; i < 32; i++) {
-        ghgost_l(iter_num[i], iter_const[i]);
-    }
+//     for (int i = 0; i < 32; i++) {
+//         ghgost_l(iter_num[i], iter_const[i]);
+//     }
 
-    for (int i = 0; i < 32; i++) {
-        print_block(iter_const[i]);
-        printf("\n");
-    }
-}
+//     for (int i = 0; i < 32; i++) {
+//         print_block(iter_const[i]);
+//         printf("\n");
+//     }
+// }

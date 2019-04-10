@@ -17,7 +17,7 @@ static const unsigned char PI_INV[256];
 
 static const unsigned char C[32][BLOCK_SIZE];
 
-static const unsigned char L_VEC[16];
+// static const unsigned char L_VEC[16];
 
 void ghgost_xor(const ghgost_block_t a, const ghgost_block_t b, ghgost_block_t c);
 
@@ -25,15 +25,13 @@ void ghgost_s(const ghgost_block_t in, ghgost_block_t out);
 
 void ghgost_s_inv(const ghgost_block_t in, ghgost_block_t out);
 
-uint8_t ghgost_mul(uint8_t a, uint8_t b);
+// void ghgost_r(ghgost_block_t reg);
 
-void ghgost_r(ghgost_block_t reg);
+// void ghgost_r_inv(ghgost_block_t reg);
 
-void ghgost_r_inv(ghgost_block_t reg);
+void ghgost_l(ghgost_block_t out);
 
-void ghgost_l(const ghgost_block_t in, ghgost_block_t out);
-
-void ghgost_l_inv(const ghgost_block_t in, ghgost_block_t out);
+void ghgost_l_inv(ghgost_block_t out);
 
 void ghgost_f(
     const ghgost_block_t in_key_1,
